@@ -16,11 +16,10 @@ public static class DependencyInjection
         services.AddScoped(sp =>
         {
             var builder = new DbContextOptionsBuilder();
-            builder.UseSqlServer(connectionString);
+            builder.UseNpgsql(connectionString);
             return new ApplicationDbContext(builder.Options);
         });
 
-        // Yeh wahi working code hai jo pehle bina error ke chala tha
         services.AddScoped(typeof(IAuthService), typeof(AuthService));
 
         return services;
