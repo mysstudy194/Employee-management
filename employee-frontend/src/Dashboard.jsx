@@ -31,40 +31,46 @@ export default function Dashboard() {
       const attendances = Array.isArray(attRes.data) ? attRes.data : [];
       const leaves = Array.isArray(leaveRes.data) ? leaveRes.data : [];
 
-      // Aaj ki local date
+      // Aaj ki local date aur UTC date strings (e.g., "2026-10-01" / "2026-10-02")
       const now = new Date();
-      const currentYear = now.getFullYear();
-      const currentMonth = now.getMonth();
-      const currentDate = now.getDate();
+      const localToday = `\({now.getFullYear()}-\){String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const utcToday = now.toISOString().split('T')[0];
 
-      // Aaj ke unique present employees
+      // Aaj ke present employees
       const presentEmployeeIds = new Set();
 
       attendances.forEach(function(a) {
-        if (!a.date) return;
-        const d = new Date(a.date);
-        
-        // Local Year, Month, Date comparison
-        const isToday = 
-          d.getFullYear() === currentYear &&
-          d.getMonth() === currentMonth &&
-          d.getDate() === currentDate;
+        const rawDate = a.date || a.Date;
+        if (!rawDate) return;
 
-        if (isToday && (a.status === 'Present' || a.checkInTime)) {
-          const empId = a.employeeId || (a.employee && (a.employee.id || a.employee.Id)) || a.id;
+        // Raw date format sanitize karein
+        const recordDate = typeof rawDate === 'string'
+          ? rawDate.split('T')[0]
+          : new Date(rawDate).toISOString().split('T')[0];
+
+        const status = (a.status || a.Status || '').toLowerCase();
+        const checkIn = a.checkInTime || a.CheckInTime;
+
+        // Agar date local ya UTC kisi se bhi match kare, ya valid check-in ho
+        const isToday = (recordDate === localToday || recordDate === utcToday);
+
+        if (isToday && (status === 'present' || checkIn)) {
+          const empId = a.employeeId || a.EmployeeId || (a.employee && (a.employee.id || a.employee.Id)) || a.id || a.Id;
           if (empId) {
             presentEmployeeIds.add(empId);
           }
         }
       });
 
-      // Leaves count
+      // Leaves count (Casing safe)
       const pendingCount = leaves.filter(function(l) {
-        return (l.status || '').toLowerCase() === 'pending';
+        const s = (l.status || l.Status || '').toLowerCase();
+        return s === 'pending';
       }).length;
 
       const approvedCount = leaves.filter(function(l) {
-        return (l.status || '').toLowerCase() === 'approved';
+        const s = (l.status || l.Status || '').toLowerCase();
+        return s === 'approved';
       }).length;
 
       setStats({
