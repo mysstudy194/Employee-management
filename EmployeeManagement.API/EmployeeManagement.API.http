@@ -1,4 +1,4 @@
-@EmployeeManagement.API_HostAddress = http://localhost:5206
+@EmployeeManagement.API_HostAddress = https://employee-management-production-aa2e.up.railway.app
 
 GET {{EmployeeManagement.API_HostAddress}}/weatherforecast/
 Accept: application/json

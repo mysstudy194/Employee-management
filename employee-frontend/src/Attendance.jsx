@@ -7,8 +7,8 @@ export default function Attendance() {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
-  const ATTENDANCE_URL = 'http://localhost:5206/api/Attendances';
-  const EMPLOYEES_URL = 'http://localhost:5206/api/Employees';
+  const ATTENDANCE_URL = 'https://employee-management-production-aa2e.up.railway.app/api/Attendances';
+  const EMPLOYEES_URL = 'https://employee-management-production-aa2e.up.railway.app/api/Employees';
 
   const fetchData = async function() {
     try {

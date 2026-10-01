@@ -10,8 +10,8 @@ export default function Leave() {
   const [reason, setReason] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
-  const LEAVE_URL = 'http://localhost:5206/api/LeaveRequests';
-  const EMPLOYEES_URL = 'http://localhost:5206/api/Employees';
+  const LEAVE_URL = 'https://employee-management-production-aa2e.up.railway.app/api/LeaveRequests';
+  const EMPLOYEES_URL = 'https://employee-management-production-aa2e.up.railway.app/api/Employees';
 
   const fetchData = async function() {
     const token = localStorage.getItem('token');

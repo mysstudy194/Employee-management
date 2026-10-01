@@ -9,7 +9,7 @@ export default function Employees() {
   const [editingId, setEditingId] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const API_URL = 'http://localhost:5206/api/Employees';
+  const API_URL = 'https://employee-management-production-aa2e.up.railway.app/api/Employees';
 
   const fetchEmployees = async function() {
     try {

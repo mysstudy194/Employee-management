@@ -11,9 +11,9 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const EMPLOYEES_URL = 'http://localhost:5206/api/Employees';
-  const ATTENDANCE_URL = 'http://localhost:5206/api/Attendances';
-  const LEAVE_URL = 'http://localhost:5206/api/LeaveRequests';
+  const EMPLOYEES_URL = 'https://employee-management-production-aa2e.up.railway.app/api/Employees';
+  const ATTENDANCE_URL = 'https://employee-management-production-aa2e.up.railway.app/api/Attendances';
+  const LEAVE_URL = 'https://employee-management-production-aa2e.up.railway.app/api/LeaveRequests';
 
   const fetchDashboardStats = async function() {
     try {

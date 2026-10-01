@@ -11,7 +11,7 @@ export default function Login(props) {
     setErrorMsg('');
 
     try {
-      const res = await axios.post('http://localhost:5206/api/Auth/login', {
+      const res = await axios.post('https://employee-management-production-aa2e.up.railway.app/api/Auth/login', {
         username: username,
         password: password
       });

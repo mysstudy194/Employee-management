@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const API = axios.create({
-  baseURL: 'http://localhost:5206/api',
+  baseURL: 'https://employee-management-production-aa2e.up.railway.app/api',
 });
 
 // Request interceptor: Har API call ke sath automatic Bearer token send karega
