@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
 export default function Dashboard() {
@@ -31,19 +31,16 @@ export default function Dashboard() {
       const attendances = Array.isArray(attRes.data) ? attRes.data : [];
       const leaves = Array.isArray(leaveRes.data) ? leaveRes.data : [];
 
-      // Aaj ki local date aur UTC date strings (e.g., "2026-10-01" / "2026-10-02")
       const now = new Date();
       const localToday = `\({now.getFullYear()}-\){String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
       const utcToday = now.toISOString().split('T')[0];
 
-      // Aaj ke present employees
       const presentEmployeeIds = new Set();
 
       attendances.forEach(function(a) {
         const rawDate = a.date || a.Date;
         if (!rawDate) return;
 
-        // Raw date format sanitize karein
         const recordDate = typeof rawDate === 'string'
           ? rawDate.split('T')[0]
           : new Date(rawDate).toISOString().split('T')[0];
@@ -51,7 +48,6 @@ export default function Dashboard() {
         const status = (a.status || a.Status || '').toLowerCase();
         const checkIn = a.checkInTime || a.CheckInTime;
 
-        // Agar date local ya UTC kisi se bhi match kare, ya valid check-in ho
         const isToday = (recordDate === localToday || recordDate === utcToday);
 
         if (isToday && (status === 'present' || checkIn)) {
@@ -62,7 +58,6 @@ export default function Dashboard() {
         }
       });
 
-      // Leaves count (Casing safe)
       const pendingCount = leaves.filter(function(l) {
         const s = (l.status || l.Status || '').toLowerCase();
         return s === 'pending';
@@ -118,8 +113,6 @@ export default function Dashboard() {
     { style: { maxWidth: '900px', margin: '20px auto', fontFamily: 'sans-serif' } },
     React.createElement('h2', { style: { textAlign: 'center', color: '#555', marginBottom: '25px' } }, 'System Overview'),
     errorMsg ? React.createElement('p', { style: { color: 'red', textAlign: 'center' } }, errorMsg) : null,
-
-    // Cards Grid
     React.createElement(
       'div',
       {
@@ -136,8 +129,6 @@ export default function Dashboard() {
       createCard('Pending Leaves', stats.pendingLeaves, '#fef9e7', '#f39c12'),
       createCard('Approved Leaves', stats.approvedLeaves, '#f5eef8', '#8e44ad')
     ),
-
-    // Quick Info Box
     React.createElement(
       'div',
       {
