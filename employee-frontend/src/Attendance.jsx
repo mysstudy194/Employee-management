@@ -2,178 +2,200 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
 export default function Attendance() {
-  const [attendanceList, setAttendanceList] = useState([]);
-  const [employees, setEmployees] = useState([]);
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
+  const [attendances, setAttendances] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [msg, setMsg] = useState({ text: '', isError: false });
 
-  const ATTENDANCE_URL = 'https://employee-management-production-aa2e.up.railway.app/api/Attendances';
-  const EMPLOYEES_URL = 'https://employee-management-production-aa2e.up.railway.app/api/Employees';
+  const BASE_URL = 'https://employee-management-production-aa2e.up.railway.app/api';
 
-  const fetchData = async function() {
+  const fetchAttendanceRecords = async function() {
     try {
-      const token = localStorage.getItem('token');
-      const headers = token ? { Authorization: 'Bearer ' + token } : {};
-
-      const [attRes, empRes] = await Promise.all([
-        axios.get(ATTENDANCE_URL, { headers: headers }),
-        axios.get(EMPLOYEES_URL, { headers: headers })
-      ]);
-
-      setAttendanceList(Array.isArray(attRes.data) ? attRes.data : []);
-      const empData = Array.isArray(empRes.data) ? empRes.data : [];
-      setEmployees(empData);
-      if (empData.length > 0 && !selectedEmployeeId) {
-        setSelectedEmployeeId(empData[0].id || empData[0].Id);
-      }
-      setErrorMsg('');
+      setLoading(true);
+      const res = await axios.get(BASE_URL + '/Attendances');
+      const data = Array.isArray(res.data) ? res.data : [];
+      setAttendances(data);
     } catch (err) {
-      setErrorMsg('Failed to load attendance records');
+      setMsg({ text: 'Failed to load attendance records.', isError: true });
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(function() {
-    fetchData();
+    fetchAttendanceRecords();
   }, []);
 
-  const handleCheckIn = async function() {
-    if (!selectedEmployeeId) {
-      alert('Please select an employee');
-      return;
-    }
-
+  const formatDisplayTime = function(timeVal) {
+    if (!timeVal) return '-';
     try {
-      const token = localStorage.getItem('token');
-      const headers = token ? { Authorization: 'Bearer ' + token } : {};
-
-      const payload = {
-        employeeId: parseInt(selectedEmployeeId, 10)
-      };
-
-      await axios.post(ATTENDANCE_URL + '/check-in', payload, { headers: headers });
-      fetchData();
-    } catch (err) {
-      const serverMsg = err.response && err.response.data && err.response.data.message
-        ? err.response.data.message
-        : (err.response && err.response.data ? JSON.stringify(err.response.data) : err.message);
-      alert('Check-in failed: ' + serverMsg);
+      if (timeVal.includes('T') || timeVal.includes('Z')) {
+        return new Date(timeVal).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      }
+      return timeVal;
+    } catch (e) {
+      return timeVal;
     }
   };
 
-  const handleCheckOut = async function() {
-    if (!selectedEmployeeId) {
-      alert('Please select an employee');
-      return;
-    }
-
-    try {
-      const token = localStorage.getItem('token');
-      const headers = token ? { Authorization: 'Bearer ' + token } : {};
-
-      const payload = {
-        employeeId: parseInt(selectedEmployeeId, 10)
-      };
-
-      await axios.post(ATTENDANCE_URL + '/check-out', payload, { headers: headers });
-      fetchData();
-    } catch (err) {
-      const serverMsg = err.response && err.response.data && err.response.data.message
-        ? err.response.data.message
-        : (err.response && err.response.data ? JSON.stringify(err.response.data) : err.message);
-      alert('Check-out failed: ' + serverMsg);
-    }
-  };
-
-  const employeeOptions = employees.map(function(emp) {
-    const id = emp.id || emp.Id;
-    const name = ((emp.firstName || emp.FirstName || '') + ' ' + (emp.lastName || emp.LastName || '')).trim() || 'Employee ' + id;
-    return React.createElement('option', { key: id, value: id }, name);
+  const filteredAttendances = attendances.filter(function(record) {
+    const name = (record.employeeName || record.EmployeeName || '').toLowerCase();
+    return name.includes(searchTerm.toLowerCase());
   });
-
-  const tableRows = attendanceList.length === 0
-    ? [
-        React.createElement(
-          'tr',
-          { key: 'empty' },
-          React.createElement('td', { colSpan: 5, style: { textAlign: 'center', padding: '15px', color: '#888' } }, 'No attendance records found')
-        )
-      ]
-    : attendanceList.map(function(att, idx) {
-        const attId = att.id || att.Id || idx;
-        const empName = att.employeeName || (att.employee ? ((att.employee.firstName || '') + ' ' + (att.employee.lastName || '')) : 'Employee #' + att.employeeId);
-        const dateStr = att.date ? new Date(att.date).toLocaleDateString() : 'N/A';
-        const checkInStr = att.checkInTime ? new Date(att.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-';
-        const checkOutStr = att.checkOutTime ? new Date(att.checkOutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-';
-        const currentStatus = att.status || 'Present';
-
-        return React.createElement(
-          'tr',
-          { key: attId, style: { borderBottom: '1px solid #eee' } },
-          React.createElement('td', { style: { padding: '10px' } }, empName),
-          React.createElement('td', { style: { padding: '10px' } }, dateStr),
-          React.createElement('td', { style: { padding: '10px' } }, checkInStr),
-          React.createElement('td', { style: { padding: '10px' } }, checkOutStr),
-          React.createElement('td', { style: { padding: '10px', fontWeight: 'bold', color: currentStatus === 'Present' ? '#28a745' : '#dc3545' } }, currentStatus)
-        );
-      });
 
   return React.createElement(
     'div',
-    { style: { maxWidth: '850px', margin: '20px auto', fontFamily: 'sans-serif' } },
-    React.createElement('h2', { style: { textAlign: 'center', color: '#555' } }, 'Attendance Management'),
-    errorMsg ? React.createElement('p', { style: { color: 'red', textAlign: 'center' } }, errorMsg) : null,
-    
-    // Actions Section
+    {
+      style: {
+        width: '100%',
+        maxWidth: '1000px',
+        margin: '20px auto',
+        padding: '0 16px',
+        boxSizing: 'border-box',
+        fontFamily: 'Segoe UI, Roboto, Helvetica, Arial, sans-serif'
+      }
+    },
+
+    // Title
+    React.createElement('h2', { style: { textAlign: 'center', color: '#1f2937', marginBottom: '20px' } }, 'Attendance Management'),
+
+    // Alert Message
+    msg.text ? React.createElement(
+      'div',
+      {
+        style: {
+          padding: '10px 15px',
+          marginBottom: '15px',
+          borderRadius: '6px',
+          textAlign: 'center',
+          backgroundColor: msg.isError ? '#fee2e2' : '#dcfce7',
+          color: msg.isError ? '#991b1b' : '#166534',
+          border: '1px solid ' + (msg.isError ? '#fecaca' : '#bbf7d0')
+        }
+      },
+      msg.text
+    ) : null,
+
+    // Search and Refresh Bar
     React.createElement(
       'div',
-      { style: { display: 'flex', gap: '10px', marginBottom: '20px', alignItems: 'center' } },
-      React.createElement(
-        'select',
-        {
-          value: selectedEmployeeId,
-          onChange: function(e) { setSelectedEmployeeId(e.target.value); },
-          style: { flex: 2, padding: '9px', borderRadius: '4px', border: '1px solid #ccc' }
-        },
-        employeeOptions.length > 0 ? employeeOptions : React.createElement('option', { value: '' }, 'No employees available')
-      ),
+      {
+        style: {
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '16px',
+          flexWrap: 'wrap',
+          gap: '12px'
+        }
+      },
+      React.createElement('input', {
+        type: 'text',
+        placeholder: 'Search employee by name...',
+        value: searchTerm,
+        onChange: function(e) { setSearchTerm(e.target.value); },
+        style: {
+          padding: '10px 14px',
+          borderRadius: '8px',
+          border: '1px solid #d1d5db',
+          width: '260px',
+          fontSize: '14px'
+        }
+      }),
       React.createElement(
         'button',
         {
-          type: 'button',
-          onClick: handleCheckIn,
-          style: { padding: '9px 18px', backgroundColor: '#28a745', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }
+          onClick: fetchAttendanceRecords,
+          style: {
+            backgroundColor: '#2563eb',
+            color: '#ffffff',
+            border: 'none',
+            padding: '10px 18px',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontWeight: '600',
+            fontSize: '14px'
+          }
         },
-        'Check-In'
-      ),
-      React.createElement(
-        'button',
-        {
-          type: 'button',
-          onClick: handleCheckOut,
-          style: { padding: '9px 18px', backgroundColor: '#dc3545', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }
-        },
-        'Check-Out'
+        'Refresh Records'
       )
     ),
 
-    // Table
+    // Records Table
     React.createElement(
-      'table',
-      { style: { width: '100%', borderCollapse: 'collapse', textAlign: 'left', border: '1px solid #e0e0e0' } },
+      'div',
+      {
+        style: {
+          backgroundColor: '#ffffff',
+          borderRadius: '12px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.06)',
+          overflowX: 'auto',
+          width: '100%'
+        }
+      },
       React.createElement(
-        'thead',
-        null,
+        'table',
+        { style: { width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '650px' } },
         React.createElement(
-          'tr',
-          { style: { borderBottom: '2px solid #ccc', backgroundColor: '#f4f6f8' } },
-          React.createElement('th', { style: { padding: '12px 10px' } }, 'Employee'),
-          React.createElement('th', { style: { padding: '12px 10px' } }, 'Date'),
-          React.createElement('th', { style: { padding: '12px 10px' } }, 'Check-In'),
-          React.createElement('th', { style: { padding: '12px 10px' } }, 'Check-Out'),
-          React.createElement('th', { style: { padding: '12px 10px' } }, 'Status')
+          'thead',
+          null,
+          React.createElement(
+            'tr',
+            { style: { backgroundColor: '#f9fafb', borderBottom: '2px solid #e5e7eb' } },
+            React.createElement('th', { style: { padding: '12px 16px', color: '#4b5563', fontSize: '13px' } }, 'Employee'),
+            React.createElement('th', { style: { padding: '12px 16px', color: '#4b5563', fontSize: '13px' } }, 'Date'),
+            React.createElement('th', { style: { padding: '12px 16px', color: '#4b5563', fontSize: '13px' } }, 'Check-In'),
+            React.createElement('th', { style: { padding: '12px 16px', color: '#4b5563', fontSize: '13px' } }, 'Check-Out'),
+            React.createElement('th', { style: { padding: '12px 16px', color: '#4b5563', fontSize: '13px' } }, 'Status')
+          )
+        ),
+        React.createElement(
+          'tbody',
+          null,
+          loading
+            ? React.createElement(
+                'tr',
+                null,
+                React.createElement('td', { colSpan: '5', style: { padding: '24px', textAlign: 'center', color: '#6b7280' } }, 'Loading records...')
+              )
+            : filteredAttendances.length === 0
+            ? React.createElement(
+                'tr',
+                null,
+                React.createElement('td', { colSpan: '5', style: { padding: '24px', textAlign: 'center', color: '#9ca3af' } }, 'No attendance records found.')
+              )
+            : filteredAttendances.map(function(item) {
+                const id = item.id || item.Id;
+                const dateStr = (item.date || item.Date || '').split('T')[0];
+                return React.createElement(
+                  'tr',
+                  { key: id, style: { borderBottom: '1px solid #f3f4f6' } },
+                  React.createElement('td', { style: { padding: '12px 16px', fontWeight: '600', color: '#1f2937' } }, item.employeeName || item.EmployeeName || ('ID: ' + (item.employeeId || item.EmployeeId))),
+                  React.createElement('td', { style: { padding: '12px 16px', color: '#4b5563' } }, dateStr),
+                  React.createElement('td', { style: { padding: '12px 16px', color: '#16a34a', fontWeight: '600' } }, formatDisplayTime(item.checkInTime || item.CheckInTime)),
+                  React.createElement('td', { style: { padding: '12px 16px', color: '#d97706', fontWeight: '600' } }, formatDisplayTime(item.checkOutTime || item.CheckOutTime)),
+                  React.createElement(
+                    'td',
+                    { style: { padding: '12px 16px' } },
+                    React.createElement(
+                      'span',
+                      {
+                        style: {
+                          backgroundColor: '#dcfce7',
+                          color: '#166534',
+                          padding: '4px 10px',
+                          borderRadius: '9999px',
+                          fontSize: '12px',
+                          fontWeight: '600'
+                        }
+                      },
+                      item.status || item.Status || 'Present'
+                    )
+                  )
+                );
+              })
         )
-      ),
-      React.createElement('tbody', null, tableRows)
+      )
     )
   );
 }

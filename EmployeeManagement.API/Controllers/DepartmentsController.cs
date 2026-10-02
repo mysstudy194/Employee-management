@@ -1,12 +1,11 @@
+using System.Linq;
 using EmployeeManagement.Domain.DTOs.Department;
 using EmployeeManagement.Domain.Entities;
 using EmployeeManagement.Infrastructure.Data;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EmployeeManagement.API.Controllers;
 
-[Authorize]
 [ApiController]
 [Route("api/[controller]")]
 public class DepartmentsController : ControllerBase
@@ -55,7 +54,6 @@ public class DepartmentsController : ControllerBase
     }
 
     // POST: api/departments
-    [Authorize(Roles = "Admin")]
     [HttpPost]
     public IActionResult CreateDepartment([FromBody] CreateDepartmentDto createDto)
     {
@@ -64,10 +62,28 @@ public class DepartmentsController : ControllerBase
             return BadRequest(ModelState);
         }
 
+        var trimmedName = (createDto.Name ?? string.Empty).Trim();
+
+        // Check if department already exists (case-insensitive)
+        var existing = _context.Departments
+            .FirstOrDefault(d => d.Name.ToLower() == trimmedName.ToLower());
+
+        if (existing != null)
+        {
+            return Ok(new DepartmentDto
+            {
+                Id = existing.Id,
+                Name = existing.Name,
+                Description = existing.Description
+            });
+        }
+
         var department = new Department
         {
-            Name = createDto.Name,
-            Description = createDto.Description
+            Name = trimmedName,
+            Description = string.IsNullOrWhiteSpace(createDto.Description)
+                ? trimmedName + " Department"
+                : createDto.Description
         };
 
         _context.Departments.Add(department);
@@ -84,7 +100,6 @@ public class DepartmentsController : ControllerBase
     }
 
     // PUT: api/departments/1
-    [Authorize(Roles = "Admin")]
     [HttpPut("{id}")]
     public IActionResult UpdateDepartment(int id, [FromBody] UpdateDepartmentDto updateDto)
     {
@@ -100,15 +115,12 @@ public class DepartmentsController : ControllerBase
         }
 
         department.Name = updateDto.Name;
-        department.Description = updateDto.Description;
-
         _context.SaveChanges();
 
         return NoContent();
     }
 
     // DELETE: api/departments/1
-    [Authorize(Roles = "Admin")]
     [HttpDelete("{id}")]
     public IActionResult DeleteDepartment(int id)
     {
