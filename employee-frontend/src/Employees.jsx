@@ -25,18 +25,11 @@ export default function Employees() {
 
   const BASE_URL = 'https://employee-management-production-aa2e.up.railway.app/api';
 
-  const getAuthHeaders = function() {
-    const token = localStorage.getItem('token');
-    return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
-  };
-
   const fetchData = async function() {
     try {
       const [empRes, deptRes] = await Promise.all([
         axios.get(BASE_URL + '/Employees'),
-        axios.get(BASE_URL + '/Departments', getAuthHeaders()).catch(function() {
-          return axios.get(BASE_URL + '/Departments');
-        }).catch(function() { return { data: [] }; })
+        axios.get(BASE_URL + '/Departments').catch(function() { return { data: [] }; })
       ]);
 
       const emps = Array.isArray(empRes.data) ? empRes.data : [];
@@ -53,10 +46,14 @@ export default function Employees() {
     fetchData();
   }, []);
 
+  // Department ID resolve karna (NO SILENT FALLBACK TO 1)
   const getOrCreateDepartmentId = async function(deptInputName) {
     const cleanName = (deptInputName || '').trim();
-    if (!cleanName) return 1;
+    if (!cleanName) {
+      throw new Error('Please enter a department name.');
+    }
 
+    // 1. Agar pehle se maujood departments mein match ho jaye
     const existing = departments.find(function(d) {
       const dName = (d.name || d.Name || '').toLowerCase().trim();
       return dName === cleanName.toLowerCase();
@@ -66,25 +63,41 @@ export default function Employees() {
       return existing.id || existing.Id;
     }
 
+    // 2. Naya department create karein
     try {
-      const createRes = await axios.post(
-        BASE_URL + '/Departments',
-        {
-          name: cleanName,
-          description: cleanName + ' Department'
-        },
-        getAuthHeaders()
-      );
+      const createRes = await axios.post(BASE_URL + '/Departments', {
+        name: cleanName,
+        description: cleanName + ' Department'
+      });
+
       const newId = createRes.data?.id || createRes.data?.Id;
-      if (newId) return newId;
+      if (newId) {
+        return newId;
+      }
     } catch (err) {
-      console.warn('Backend rejected department creation, using fallback department.');
+      const status = err.response?.status;
+      const backendError = err.response?.data?.message || err.response?.data?.title || (typeof err.response?.data === 'string' ? err.response?.data : JSON.stringify(err.response?.data || ''));
+      
+      if (status === 401 || status === 403) {
+        throw new Error('Backend is still running old deployment with authorization restrictions. Please wait 1 minute for Railway deployment to finish.');
+      }
+      throw new Error(`Failed to create department "\({cleanName}":\){backendError || err.message}`);
     }
 
-    if (departments.length > 0) {
-      return departments[0].id || departments[0].Id || 1;
-    }
-    return 1;
+    // 3. Departments dobara fetch karke verify karein
+    try {
+      const refreshRes = await axios.get(BASE_URL + '/Departments');
+      const allDepts = Array.isArray(refreshRes.data) ? refreshRes.data : [];
+      setDepartments(allDepts);
+      const matched = allDepts.find(function(d) {
+        return (d.name || d.Name || '').toLowerCase().trim() === cleanName.toLowerCase();
+      });
+      if (matched) {
+        return matched.id || matched.Id;
+      }
+    } catch (e) {}
+
+    throw new Error(`Department "${cleanName}" could not be created on server.`);
   };
 
   // Handle Add Employee
@@ -97,26 +110,26 @@ export default function Employees() {
       return;
     }
 
-    // Capture the exact employee full name before clearing inputs
     const registeredFullName = firstName.trim() + ' ' + lastName.trim();
 
     try {
       setLoading(true);
 
-      const resolvedDeptId = await getOrCreateDepartmentId(departmentName.trim());
+      // Naye department ki ID nikalen (Agar fail hoga to yahi ruk jayega aur CS nahi lagayega)
+      const targetDeptId = await getOrCreateDepartmentId(departmentName.trim());
       const empEmail = email.trim() || (username.trim().toLowerCase().replace(/\s+/g, '') + '@company.com');
 
-      // 1. Create Employee Record
+      // 1. Employee banayein
       await axios.post(BASE_URL + '/Employees', {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         email: empEmail,
         phone: phone.trim() || '123-456-7890',
-        departmentId: parseInt(resolvedDeptId),
+        departmentId: parseInt(targetDeptId),
         salary: 50000
       });
 
-      // 2. Register Login Credentials
+      // 2. User login register karein
       try {
         await axios.post(BASE_URL + '/auth/register', {
           username: username.trim(),
@@ -124,13 +137,13 @@ export default function Employees() {
           password: password.trim(),
           role: 'Employee'
         });
-        setMsg({ text: 'Employee "' + registeredFullName + '" created successfully!', isError: false });
+        setMsg({ text: 'Employee "' + registeredFullName + '" created successfully under department "' + departmentName.trim() + '"!', isError: false });
       } catch (authErr) {
         const errorDetail =
           authErr.response?.data?.message ||
           authErr.response?.data?.details ||
           'Username already exists or password invalid.';
-        setMsg({ text: 'Employee "' + registeredFullName + '" created, but login registration failed: ' + errorDetail, isError: true });
+        setMsg({ text: 'Employee "' + registeredFullName + '" created under department "' + departmentName.trim() + '", but user login failed: ' + errorDetail, isError: true });
       }
 
       setFirstName('');
@@ -142,8 +155,7 @@ export default function Employees() {
       setPassword('');
       fetchData();
     } catch (err) {
-      const errResponse = err.response?.data?.message || 'An error occurred while creating the employee.';
-      setMsg({ text: errResponse, isError: true });
+      setMsg({ text: err.message || 'An error occurred while creating the employee.', isError: true });
     } finally {
       setLoading(false);
     }
@@ -170,7 +182,7 @@ export default function Employees() {
 
     try {
       setLoading(true);
-      const resolvedDeptId = await getOrCreateDepartmentId(editDepartmentName.trim());
+      const targetDeptId = await getOrCreateDepartmentId(editDepartmentName.trim());
 
       await axios.put(BASE_URL + '/Employees/' + id, {
         id: id,
@@ -178,7 +190,7 @@ export default function Employees() {
         lastName: editLastName.trim(),
         email: editingEmp.email || editingEmp.Email,
         phone: editPhone.trim(),
-        departmentId: parseInt(resolvedDeptId),
+        departmentId: parseInt(targetDeptId),
         salary: editingEmp.salary || editingEmp.Salary || 50000
       });
 
@@ -235,7 +247,6 @@ export default function Employees() {
     },
     React.createElement('h2', { style: { textAlign: 'center', color: '#1f2937', marginBottom: '20px' } }, 'Employee Management'),
 
-    // Alert Message Popup
     msg.text ? React.createElement(
       'div',
       {
@@ -302,7 +313,7 @@ export default function Employees() {
           React.createElement('input', {
             type: 'text',
             list: 'department-suggestions',
-            placeholder: 'Type department (e.g. CS, Software, HR)',
+            placeholder: 'Type department (e.g. TTMS, Finance, CEO)',
             value: departmentName,
             onChange: function(e) { setDepartmentName(e.target.value); },
             required: true,
