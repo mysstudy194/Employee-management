@@ -1,48 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-export default function Leave() {
-  const [leaveList, setLeaveList] = useState([]);
+export default function LeaveRequests() {
+  const [leaves, setLeaves] = useState([]);
   const [employees, setEmployees] = useState([]);
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+  const [selectedEmp, setSelectedEmp] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [reason, setReason] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState({ text: '', isError: false });
 
-  const LEAVE_URL = 'https://employee-management-production-aa2e.up.railway.app/api/LeaveRequests';
-  const EMPLOYEES_URL = 'https://employee-management-production-aa2e.up.railway.app/api/Employees';
+  const BASE_URL = 'https://employee-management-production-aa2e.up.railway.app/api';
 
   const fetchData = async function() {
-    const token = localStorage.getItem('token');
-    const headers = token ? { Authorization: 'Bearer ' + token } : {};
-
-    // 1. Load Employees
     try {
-      const empRes = await axios.get(EMPLOYEES_URL, { headers: headers });
-      const empData = Array.isArray(empRes.data) ? empRes.data : [];
-      setEmployees(empData);
-      if (empData.length > 0) {
-        setSelectedEmployeeId(function(prev) {
-          return prev ? prev : (empData[0].id || empData[0].Id);
-        });
+      const [leaveRes, empRes] = await Promise.all([
+        axios.get(BASE_URL + '/LeaveRequests'),
+        axios.get(BASE_URL + '/Employees')
+      ]);
+      const leavesData = Array.isArray(leaveRes.data) ? leaveRes.data : [];
+      const empsData = Array.isArray(empRes.data) ? empRes.data : [];
+      setLeaves(leavesData);
+      setEmployees(empsData);
+      if (empsData.length > 0 && !selectedEmp) {
+        setSelectedEmp(empsData[0].id || empsData[0].Id);
       }
-    } catch (empErr) {
-      console.error('Failed to load employees for leave dropdown', empErr);
-    }
-
-    // 2. Load Leave Records
-    try {
-      const leaveRes = await axios.get(LEAVE_URL, { headers: headers });
-      setLeaveList(Array.isArray(leaveRes.data) ? leaveRes.data : []);
-      setErrorMsg('');
-    } catch (leaveErr) {
-      console.error('Failed to load leave records', leaveErr);
-      if (leaveErr.response && leaveErr.response.status === 401) {
-        setErrorMsg('Unauthorized: Please login again.');
-      } else {
-        setErrorMsg('Failed to load leave records');
-      }
+    } catch (err) {
+      setMsg({ text: 'Data fetch karne mein masla hua', isError: true });
     }
   };
 
@@ -50,194 +35,242 @@ export default function Leave() {
     fetchData();
   }, []);
 
-  const handleApplyLeave = async function(e) {
+  const handleSubmit = async function(e) {
     e.preventDefault();
-    if (!selectedEmployeeId) {
-      alert('Please select an employee');
-      return;
-    }
-    if (!startDate || !endDate) {
-      alert('Please select start and end dates');
+    if (!selectedEmp || !startDate || !endDate || !reason) {
+      setMsg({ text: 'Tamam fields fill karein', isError: true });
       return;
     }
 
     try {
-      const token = localStorage.getItem('token');
-      const headers = token ? { Authorization: 'Bearer ' + token } : {};
-
-      const payload = {
-        employeeId: parseInt(selectedEmployeeId, 10),
-        startDate: new Date(startDate).toISOString(),
-        endDate: new Date(endDate).toISOString(),
-        reason: reason.trim() || 'No reason provided'
-      };
-
-      await axios.post(LEAVE_URL, payload, { headers: headers });
-      setReason('');
-      setStartDate('');
-      setEndDate('');
-      fetchData();
-    } catch (err) {
-      const serverMsg = err.response && err.response.data && err.response.data.message
-        ? err.response.data.message
-        : (err.response && err.response.data ? JSON.stringify(err.response.data) : err.message);
-      alert('Failed to submit leave request: ' + serverMsg);
-    }
-  };
-
-  const handleUpdateStatus = async function(id, newStatus) {
-    try {
-      const token = localStorage.getItem('token');
-      const headers = token ? { Authorization: 'Bearer ' + token } : {};
-
-      const payload = {
-        status: newStatus
-      };
-
-      await axios.put(LEAVE_URL + '/' + id + '/status', payload, { headers: headers });
-      fetchData();
-    } catch (err) {
-      const serverMsg = err.response && err.response.data && err.response.data.message
-        ? err.response.data.message
-        : (err.response && err.response.data ? JSON.stringify(err.response.data) : err.message);
-      alert('Failed to update leave status: ' + serverMsg);
-    }
-  };
-
-  const employeeOptions = employees.map(function(emp) {
-    const id = emp.id || emp.Id;
-    const name = ((emp.firstName || emp.FirstName || '') + ' ' + (emp.lastName || emp.LastName || '')).trim() || 'Employee ' + id;
-    return React.createElement('option', { key: id, value: id }, name);
-  });
-
-  const tableRows = leaveList.length === 0
-    ? [
-        React.createElement(
-          'tr',
-          { key: 'empty' },
-          React.createElement('td', { colSpan: 6, style: { textAlign: 'center', padding: '15px', color: '#888' } }, 'No leave requests found')
-        )
-      ]
-    : leaveList.map(function(item, idx) {
-        const reqId = item.id || item.Id || idx;
-        const empName = item.employeeName || (item.employee ? ((item.employee.firstName || '') + ' ' + (item.employee.lastName || '')) : 'Employee #' + item.employeeId);
-        const sDate = item.startDate ? new Date(item.startDate).toLocaleDateString() : '-';
-        const eDate = item.endDate ? new Date(item.endDate).toLocaleDateString() : '-';
-        const itemReason = item.reason || 'N/A';
-        const itemStatus = item.status || 'Pending';
-
-        let statusColor = '#ff9800'; // Pending
-        if (itemStatus.toLowerCase() === 'approved') statusColor = '#28a745';
-        if (itemStatus.toLowerCase() === 'rejected') statusColor = '#dc3545';
-
-        // Action Buttons: Sirf tab dikhayenge jab status Pending ho
-        const actionContent = itemStatus.toLowerCase() === 'pending'
-          ? React.createElement(
-              'div',
-              { style: { display: 'flex', gap: '6px' } },
-              React.createElement(
-                'button',
-                {
-                  type: 'button',
-                  onClick: function() { handleUpdateStatus(reqId, 'Approved'); },
-                  style: { padding: '4px 8px', backgroundColor: '#28a745', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }
-                },
-                'Approve'
-              ),
-              React.createElement(
-                'button',
-                {
-                  type: 'button',
-                  onClick: function() { handleUpdateStatus(reqId, 'Rejected'); },
-                  style: { padding: '4px 8px', backgroundColor: '#dc3545', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }
-                },
-                'Reject'
-              )
-            )
-          : React.createElement('span', { style: { color: '#888', fontSize: '13px' } }, 'Completed');
-
-        return React.createElement(
-          'tr',
-          { key: reqId, style: { borderBottom: '1px solid #eee' } },
-          React.createElement('td', { style: { padding: '10px' } }, empName),
-          React.createElement('td', { style: { padding: '10px' } }, sDate),
-          React.createElement('td', { style: { padding: '10px' } }, eDate),
-          React.createElement('td', { style: { padding: '10px' } }, itemReason),
-          React.createElement('td', { style: { padding: '10px', fontWeight: 'bold', color: statusColor } }, itemStatus),
-          React.createElement('td', { style: { padding: '10px' } }, actionContent)
-        );
+      setLoading(true);
+      await axios.post(BASE_URL + '/LeaveRequests', {
+        employeeId: parseInt(selectedEmp),
+        startDate: startDate,
+        endDate: endDate,
+        reason: reason
       });
+      setMsg({ text: 'Leave request submit ho gayi!', isError: false });
+      setReason('');
+      fetchData();
+    } catch (err) {
+      setMsg({ text: 'Request submit nahi ho saki', isError: true });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStatusUpdate = async function(id, status) {
+    try {
+      await axios.put(BASE_URL + '/LeaveRequests/' + id + '/status', {
+        status: status
+      });
+      setLeaves(function(prev) {
+        return prev.map(function(l) {
+          return (l.id === id || l.Id === id) ? Object.assign({}, l, { status: status, Status: status }) : l;
+        });
+      });
+      setMsg({ text: 'Request ' + status + ' kar di gayi!', isError: false });
+    } catch (err) {
+      setMsg({ text: 'Status update nahi ho saka', isError: true });
+    }
+  };
 
   return React.createElement(
     'div',
-    { style: { maxWidth: '900px', margin: '20px auto', fontFamily: 'sans-serif' } },
-    React.createElement('h2', { style: { textAlign: 'center', color: '#555' } }, 'Leave Management'),
-    errorMsg ? React.createElement('p', { style: { color: 'red', textAlign: 'center' } }, errorMsg) : null,
+    { style: { width: '100%', maxWidth: '1000px', margin: '20px auto', padding: '0 15px', boxSizing: 'border-box', fontFamily: 'sans-serif' } },
+    React.createElement('h2', { style: { textAlign: 'center', color: '#333', marginBottom: '20px' } }, 'Leave Management'),
 
-    // Apply Leave Form
+    msg.text ? React.createElement(
+      'div',
+      {
+        style: {
+          padding: '10px 15px',
+          marginBottom: '15px',
+          borderRadius: '5px',
+          textAlign: 'center',
+          backgroundColor: msg.isError ? '#f8d7da' : '#d4edda',
+          color: msg.isError ? '#721c24' : '#155724',
+          border: '1px solid ' + (msg.isError ? '#f5c6cb' : '#c3e6cb')
+        }
+      },
+      msg.text
+    ) : null,
+
+    // Form
     React.createElement(
       'form',
-      { onSubmit: handleApplyLeave, style: { display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '20px' } },
+      {
+        onSubmit: handleSubmit,
+        style: {
+          backgroundColor: '#fff',
+          padding: '20px',
+          borderRadius: '8px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+          marginBottom: '25px',
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '12px'
+        }
+      },
       React.createElement(
         'select',
         {
-          value: selectedEmployeeId,
-          onChange: function(e) { setSelectedEmployeeId(e.target.value); },
-          style: { flex: '1 1 200px', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }
+          value: selectedEmp,
+          onChange: function(e) { setSelectedEmp(e.target.value); },
+          style: { flex: '1 1 200px', padding: '10px', borderRadius: '5px', border: '1px solid #ccc' }
         },
-        employeeOptions.length > 0 ? employeeOptions : React.createElement('option', { value: '' }, 'No employees available')
+        employees.map(function(emp) {
+          const val = emp.id || emp.Id;
+          const label = (emp.firstName || emp.FirstName) + ' ' + (emp.lastName || emp.LastName);
+          return React.createElement('option', { key: val, value: val }, label);
+        })
       ),
       React.createElement('input', {
         type: 'date',
         value: startDate,
-        required: true,
-        style: { flex: '1 1 140px', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' },
-        onChange: function(e) { setStartDate(e.target.value); }
+        onChange: function(e) { setStartDate(e.target.value); },
+        style: { flex: '1 1 150px', padding: '10px', borderRadius: '5px', border: '1px solid #ccc' },
+        required: true
       }),
       React.createElement('input', {
         type: 'date',
         value: endDate,
-        required: true,
-        style: { flex: '1 1 140px', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' },
-        onChange: function(e) { setEndDate(e.target.value); }
+        onChange: function(e) { setEndDate(e.target.value); },
+        style: { flex: '1 1 150px', padding: '10px', borderRadius: '5px', border: '1px solid #ccc' },
+        required: true
       }),
       React.createElement('input', {
         type: 'text',
         placeholder: 'Reason for leave',
         value: reason,
-        required: true,
-        style: { flex: '2 1 220px', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' },
-        onChange: function(e) { setReason(e.target.value); }
+        onChange: function(e) { setReason(e.target.value); },
+        style: { flex: '2 1 220px', padding: '10px', borderRadius: '5px', border: '1px solid #ccc' },
+        required: true
       }),
       React.createElement(
         'button',
         {
           type: 'submit',
-          style: { padding: '8px 20px', backgroundColor: '#007bff', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }
+          disabled: loading,
+          style: {
+            flex: '1 1 120px',
+            backgroundColor: '#007bff',
+            color: '#fff',
+            border: 'none',
+            padding: '10px 18px',
+            borderRadius: '5px',
+            cursor: 'pointer',
+            fontWeight: 'bold'
+          }
         },
-        'Submit Request'
+        loading ? 'Submitting...' : 'Submit Request'
       )
     ),
 
     // Table
     React.createElement(
-      'table',
-      { style: { width: '100%', borderCollapse: 'collapse', textAlign: 'left', border: '1px solid #e0e0e0' } },
+      'div',
+      {
+        style: {
+          backgroundColor: '#fff',
+          borderRadius: '8px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+          overflowX: 'auto',
+          width: '100%'
+        }
+      },
       React.createElement(
-        'thead',
-        null,
+        'table',
+        { style: { width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '600px' } },
         React.createElement(
-          'tr',
-          { style: { borderBottom: '2px solid #ccc', backgroundColor: '#f4f6f8' } },
-          React.createElement('th', { style: { padding: '12px 10px' } }, 'Employee'),
-          React.createElement('th', { style: { padding: '12px 10px' } }, 'Start Date'),
-          React.createElement('th', { style: { padding: '12px 10px' } }, 'End Date'),
-          React.createElement('th', { style: { padding: '12px 10px' } }, 'Reason'),
-          React.createElement('th', { style: { padding: '12px 10px' } }, 'Status'),
-          React.createElement('th', { style: { padding: '12px 10px' } }, 'Actions')
+          'thead',
+          null,
+          React.createElement(
+            'tr',
+            { style: { backgroundColor: '#f4f6f9', borderBottom: '2px solid #dee2e6' } },
+            React.createElement('th', { style: { padding: '12px 16px', color: '#495057' } }, 'Employee'),
+            React.createElement('th', { style: { padding: '12px 16px', color: '#495057' } }, 'Start Date'),
+            React.createElement('th', { style: { padding: '12px 16px', color: '#495057' } }, 'End Date'),
+            React.createElement('th', { style: { padding: '12px 16px', color: '#495057' } }, 'Reason'),
+            React.createElement('th', { style: { padding: '12px 16px', color: '#495057' } }, 'Status'),
+            React.createElement('th', { style: { padding: '12px 16px', color: '#495057', textAlign: 'center' } }, 'Action')
+          )
+        ),
+        React.createElement(
+          'tbody',
+          null,
+          leaves.length === 0
+            ? React.createElement(
+                'tr',
+                null,
+                React.createElement('td', { colSpan: '6', style: { padding: '20px', textAlign: 'center', color: '#888' } }, 'Koi leave request maujood nahi hai.')
+              )
+            : leaves.map(function(leave) {
+                const id = leave.id || leave.Id;
+                const rawStatus = leave.status || leave.Status || 'Pending';
+                const statusLower = rawStatus.toLowerCase();
+                const isPending = statusLower === 'pending';
+
+                const statusColor =
+                  statusLower === 'approved' ? '#28a745' : statusLower === 'rejected' ? '#dc3545' : '#f39c12';
+
+                return React.createElement(
+                  'tr',
+                  { key: id, style: { borderBottom: '1px solid #eee' } },
+                  React.createElement('td', { style: { padding: '12px 16px', fontWeight: '500' } }, leave.employeeName || leave.EmployeeName || ('ID: ' + (leave.employeeId || leave.EmployeeId))),
+                  React.createElement('td', { style: { padding: '12px 16px', color: '#555' } }, ((leave.startDate || leave.StartDate || '').split('T')[0])),
+                  React.createElement('td', { style: { padding: '12px 16px', color: '#555' } }, ((leave.endDate || leave.EndDate || '').split('T')[0])),
+                  React.createElement('td', { style: { padding: '12px 16px', color: '#555' } }, leave.reason || leave.Reason),
+                  React.createElement('td', { style: { padding: '12px 16px', fontWeight: 'bold', color: statusColor, textTransform: 'capitalize' } }, rawStatus),
+                  React.createElement(
+                    'td',
+                    { style: { padding: '12px 16px', textAlign: 'center' } },
+                    isPending
+                      ? React.createElement(
+                          'div',
+                          { style: { display: 'inline-flex', gap: '8px' } },
+                          React.createElement(
+                            'button',
+                            {
+                              onClick: function() { handleStatusUpdate(id, 'Approved'); },
+                              style: {
+                                backgroundColor: '#28a745',
+                                color: '#fff',
+                                border: 'none',
+                                padding: '6px 12px',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                fontWeight: 'bold'
+                              }
+                            },
+                            'Approve'
+                          ),
+                          React.createElement(
+                            'button',
+                            {
+                              onClick: function() { handleStatusUpdate(id, 'Rejected'); },
+                              style: {
+                                backgroundColor: '#dc3545',
+                                color: '#fff',
+                                border: 'none',
+                                padding: '6px 12px',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                fontWeight: 'bold'
+                              }
+                            },
+                            'Reject'
+                          )
+                        )
+                      : React.createElement('span', { style: { fontSize: '13px', color: '#888' } }, 'Done')
+                  )
+                );
+              })
         )
-      ),
-      React.createElement('tbody', null, tableRows)
+      )
     )
   );
 }
